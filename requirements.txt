@@ -3,4 +3,5 @@ python-dotenv
 PyMuPDF
 pytesseract
 Pillow
-google-generativeai
+google-generativeai>=1.0.0
+
