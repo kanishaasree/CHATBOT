@@ -4,4 +4,6 @@ PyMuPDF
 pytesseract
 Pillow
 google-genai>=0.5.0
+flask
+psycopg2-binary
 
