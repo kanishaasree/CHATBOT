@@ -2,6 +2,7 @@ import psycopg2
 from psycopg2.extras import RealDictCursor
 from typing import List
 from models import Message
+from psycopg2.extras import DictCursor
 import os
 from dotenv import load_dotenv
 
@@ -43,7 +44,7 @@ def get_messages(session: str) -> List[Message]:
 
 def get_all_sessions() -> List[str]:
     with get_connection() as conn:
-        with conn.cursor() as c:
-            c.execute("SELECT DISTINCT session FROM chats ORDER BY id DESC")
+        with conn.cursor(cursor_factory=DictCursor) as c:
+            c.execute("SELECT DISTINCT ON (session) session FROM chats ORDER BY session, id DESC")
             rows = c.fetchall()
             return [row["session"] for row in rows]
