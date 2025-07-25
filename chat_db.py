@@ -1,81 +1,72 @@
-import streamlit as st
-from google import generativeai as genai
+import psycopg2
+from psycopg2.extras import RealDictCursor
+from typing import List
+from models import Message
 import os
 from dotenv import load_dotenv
-from chat_db import (
-    create_tables, get_all_sessions, get_messages_by_session,
-    add_message, delete_session
-)
-from auth import show_login, show_register
+load_dotenv()  # Load variables from .env file
 
-# Load environment variables
-load_dotenv()
-genai.configure(api_key=os.getenv("GEMINI_API_KEY"))
+DATABASE_URL = os.getenv("DATABASE_URL")
 
-# Initialize database
-create_tables()
+def get_connection():
+    return psycopg2.connect(DATABASE_URL)
 
-# Initialize session state
-if "logged_in" not in st.session_state:
-    st.session_state.logged_in = False
-if "email" not in st.session_state:
-    st.session_state.email = None
-if "current_session" not in st.session_state:
-    st.session_state.current_session = None
+def create_tables():
+    with get_connection() as conn:
+        with conn.cursor() as c:
+            c.execute("""
+                CREATE TABLE IF NOT EXISTS users (
+                    id SERIAL PRIMARY KEY,
+                    email TEXT UNIQUE NOT NULL,
+                    password TEXT NOT NULL
+                )
+            """)
+            c.execute("""
+                CREATE TABLE IF NOT EXISTS chats (
+                    id SERIAL PRIMARY KEY,
+                    user_id INTEGER REFERENCES users(id),
+                    session TEXT,
+                    role TEXT,
+                    content TEXT
+                )
+            """)
+            conn.commit()
 
-# Show login/register before anything else
-if not st.session_state.logged_in:
-    st.sidebar.empty()  # ✅ Hide sidebar during login/register
-    auth_mode = st.sidebar.radio("Choose:", ["Login", "Register"])
-    if auth_mode == "Login":
-        show_login()
-    else:
-        show_register()
-    print("User is logged in:", st.session_state.logged_in)  # ✅ Debugging info
-    st.stop()
+def register_user(email: str, password_hash: str) -> bool:
+    try:
+        with get_connection() as conn:
+            with conn.cursor() as c:
+                c.execute("INSERT INTO users (email, password) VALUES (%s, %s)", (email, password_hash))
+                conn.commit()
+                return True
+    except:
+        return False
 
-# ✅ Show user is logged in (just for debug, optional)
-print("User is logged in:", st.session_state.logged_in)
+def get_user(email: str):
+    with get_connection() as conn:
+        with conn.cursor(cursor_factory=RealDictCursor) as c:
+            c.execute("SELECT * FROM users WHERE email = %s", (email,))
+            return c.fetchone()
 
-# Sidebar - session list and delete
-st.sidebar.title("Sessions")
-sessions = get_all_sessions(st.session_state.email)
+def save_message(user_id: int, session: str, role: str, content: str):
+    with get_connection() as conn:
+        with conn.cursor() as c:
+            c.execute(
+                "INSERT INTO chats (user_id, session, role, content) VALUES (%s, %s, %s, %s)",
+                (user_id, session, role, content)
+            )
+            conn.commit()
 
-for sess in sessions:
-    if st.sidebar.button(sess):
-        st.session_state.current_session = sess
+def get_messages(user_id: int, session: str) -> List[Message]:
+    with get_connection() as conn:
+        with conn.cursor(cursor_factory=RealDictCursor) as c:
+            c.execute("SELECT role, content FROM chats WHERE user_id = %s AND session = %s", (user_id, session))
+            rows = c.fetchall()
+            return [Message(role=row["role"], content=row["content"]) for row in rows]
 
-    if st.sidebar.button(f"❌ Delete {sess}", key=f"del_{sess}"):
-        delete_session(sess, st.session_state.email)
-        if st.session_state.current_session == sess:
-            st.session_state.current_session = None
-        st.rerun()
-
-# Main Chat Interface
-st.title("Gemini Chatbot")
-
-if not st.session_state.current_session:
-    st.session_state.current_session = st.text_input("Start a new session", "")
-
-if st.session_state.current_session:
-    st.subheader(f"Session: {st.session_state.current_session}")
-    messages = get_messages_by_session(st.session_state.current_session, st.session_state.email)
-
-    for role, content in messages:
-        with st.chat_message(role):
-            st.markdown(content)
-
-    if prompt := st.chat_input("You:"):
-        # Store user message
-        st.chat_message("user").markdown(prompt)
-        add_message("user", prompt, st.session_state.current_session, st.session_state.email)
-
-        # Generate response with Gemini
-        contents = [{"role": "user", "parts": [prompt]}]
-        full_reply = ""
-        with st.chat_message("assistant"):
-            placeholder = st.empty()
-            for chunk in genai.GenerativeModel("gemini-1.5-flash").generate_content_stream(contents):
-                full_reply += chunk.text
-                placeholder.markdown(full_reply)
-        add_message("assistant", full_reply, st.session_state.current_session, st.session_state.email)
+def get_all_sessions(user_id: int) -> List[str]:
+    with get_connection() as conn:
+        with conn.cursor(cursor_factory=RealDictCursor) as c:
+            c.execute("SELECT DISTINCT session FROM chats WHERE user_id = %s ORDER BY id DESC", (user_id,))
+            rows = c.fetchall()
+            return [row["session"] for row in rows]
