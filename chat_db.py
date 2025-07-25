@@ -67,6 +67,6 @@ def get_messages(user_id: int, session: str) -> List[Message]:
 def get_all_sessions(user_id: int) -> List[str]:
     with get_connection() as conn:
         with conn.cursor(cursor_factory=RealDictCursor) as c:
-            c.execute("SELECT DISTINCT session FROM chats WHERE user_id = %s ORDER BY id DESC", (user_id,))
+            c.execute("SELECT DISTINCT session FROM chats ORDER BY id DESC")
             rows = c.fetchall()
             return [row["session"] for row in rows]
