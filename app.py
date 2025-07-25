@@ -11,8 +11,6 @@ from auth import show_login, show_register
 # Load .env variables
 load_dotenv()
 api_key = os.getenv("API_KEY")
-
-# Configure Gemini
 client = genai.Client(api_key=api_key)
 
 # DB setup

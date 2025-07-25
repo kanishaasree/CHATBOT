@@ -2,9 +2,11 @@ import psycopg2
 from psycopg2.extras import RealDictCursor
 from typing import List
 from models import Message
+import os
+from dotenv import load_dotenv
+load_dotenv()  # Load variables from .env file
 
-# Update this with your Railway DB URL or keep as localhost for local testing
-DATABASE_URL = "your_database_url_here"
+DATABASE_URL = os.getenv("DATABASE_URL")
 
 def get_connection():
     return psycopg2.connect(DATABASE_URL)
