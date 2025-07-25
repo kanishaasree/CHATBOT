@@ -16,7 +16,8 @@ def show_login():
             st.session_state.user_id = user["id"]
             st.session_state.user_email = user["email"]
             st.success("Login successful!")
-            st.experimental_rerun()
+            st.rerun()
+
         else:
             st.error("Invalid email or password")
 
